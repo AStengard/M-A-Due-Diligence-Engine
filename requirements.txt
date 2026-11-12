@@ -1,0 +1,8 @@
+# Legal M&A Due Diligence Automation Dependencies
+pydantic>=2.0.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+pypdf>=3.0.0          # PDF extraction and ingestion
+reportlab>=4.0.0      # PDF report generation
+google-genai>=0.1.0   # Optional for LLM reasoning expansion
+python-docx>=1.0.0    # For Word redline export
