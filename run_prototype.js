@@ -375,6 +375,7 @@ function generateHTMLDashboard(dealName, targetName, results, outputPath) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>M&A Legal Due Diligence Matrix - ${dealName}</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚖️</text></svg>">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     :root {
       --bg: #0b1120;
@@ -604,6 +605,53 @@ function generateHTMLDashboard(dealName, targetName, results, outputPath) {
     .btn-reset:hover {
       color: #7dd3fc;
     }
+    .btn-export {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #065f46;
+      color: #ecfdf5;
+      border: 1px solid #059669;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+      user-select: none;
+    }
+    .btn-export:hover {
+      background: #047857;
+      border-color: #10b981;
+      color: #ffffff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+    }
+    .btn-export svg {
+      width: 16px;
+      height: 16px;
+    }
+    .btn-export-toolbar {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #1e293b;
+      color: #38bdf8;
+      border: 1px solid #334155;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+    .btn-export-toolbar:hover {
+      background: #0f172a;
+      border-color: #38bdf8;
+      color: #7dd3fc;
+    }
     
     .section-title {
       font-size: 19px;
@@ -698,7 +746,15 @@ function generateHTMLDashboard(dealName, targetName, results, outputPath) {
         Audit Date: <strong style="color: var(--text);">${dateStr}</strong>
       </p>
     </div>
-    <div class="badge-conf">ATTORNEY-CLIENT PRIVILEGED</div>
+    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+      <button id="exportExcelBtn" class="btn-export" onclick="exportToExcel()">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <span>Export to Excel (.xlsx)</span>
+      </button>
+      <div class="badge-conf">ATTORNEY-CLIENT PRIVILEGED</div>
+    </div>
   </div>
 
   <div class="metrics">
@@ -762,7 +818,15 @@ function generateHTMLDashboard(dealName, targetName, results, outputPath) {
 
     <div class="toolbar-bottom">
       <span id="resultsStats">Showing <strong>${totalFindings}</strong> of ${totalFindings} clauses across <strong>${results.length}</strong> agreements</span>
-      <button id="resetFiltersBtn" class="btn-reset" onclick="resetAllFilters()">Reset all filters</button>
+      <div style="display: flex; gap: 14px; align-items: center;">
+        <button class="btn-export-toolbar" onclick="exportToExcel()">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 14px; height: 14px;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Export to Excel
+        </button>
+        <button id="resetFiltersBtn" class="btn-reset" onclick="resetAllFilters()">Reset all filters</button>
+      </div>
     </div>
   </div>
 
@@ -789,7 +853,7 @@ function generateHTMLDashboard(dealName, targetName, results, outputPath) {
               if (isCP || isAffiliate) {
                 const failText = isAffiliate ? 'Buyer & Affiliates contaminated by post-closing non-compete.' : `${f.analysis.split('.')[0]}.`;
                 const searchData = `${r.contractTitle} ${r.parties.join(' ')} ${f.action} ${failText}`.toLowerCase().replace(/"/g, '&quot;');
-                rows += `<tr data-contract="${r.contractTitle.replace(/"/g, '&quot;')}" data-risk="${f.severity}" data-search="${searchData}">
+                rows += `<tr data-contract="${r.contractTitle.replace(/"/g, '&quot;')}" data-parties="${r.parties.join(', ').replace(/"/g, '&quot;')}" data-risk="${f.severity}" data-action="${f.action.replace(/"/g, '&quot;')}" data-fail="${failText.replace(/"/g, '&quot;')}" data-search="${searchData}">
                   <td><strong>CP-${cpIdx++}</strong></td>
                   <td><strong>${r.contractTitle}</strong><br><small style="color: var(--text-muted);">${r.parties.join(', ')}</small></td>
                   <td>${f.action}</td>
@@ -823,7 +887,7 @@ function generateHTMLDashboard(dealName, targetName, results, outputPath) {
       ${results.map(r => r.findings.map(f => {
         const tagClass = f.severity === 'CRITICAL' ? 'tag-critical' : f.severity === 'HIGH' ? 'tag-high' : f.severity === 'MEDIUM' ? 'tag-med' : 'tag-low';
         const searchData = `${r.contractTitle} ${r.parties.join(' ')} ${r.governingLaw} ${f.category} ${f.severity} ${f.analysis} ${f.action} ${f.quote}`.toLowerCase().replace(/"/g, '&quot;');
-        return `<tr data-contract="${r.contractTitle.replace(/"/g, '&quot;')}" data-risk="${f.severity}" data-clause="${f.category.replace(/"/g, '&quot;')}" data-cp="${f.consentRequired ? 'YES' : 'NO'}" data-search="${searchData}">
+        return `<tr data-contract="${r.contractTitle.replace(/"/g, '&quot;')}" data-parties="${r.parties.join(', ').replace(/"/g, '&quot;')}" data-law="${r.governingLaw.replace(/"/g, '&quot;')}" data-risk="${f.severity}" data-clause="${f.category.replace(/"/g, '&quot;')}" data-cp="${f.consentRequired ? 'YES' : 'NO'}" data-analysis="${f.analysis.replace(/"/g, '&quot;')}" data-action="${f.action.replace(/"/g, '&quot;')}" data-search="${searchData}">
           <td><strong>${r.contractTitle}</strong><br><small style="color: var(--text-muted);">${r.parties[0]} / ${r.governingLaw}</small></td>
           <td>${f.category}</td>
           <td><span class="tag ${tagClass}">${f.severity}</span></td>
@@ -960,6 +1024,156 @@ function generateHTMLDashboard(dealName, targetName, results, outputPath) {
         if (searchInput) searchInput.focus();
       }
     });
+
+    function exportToExcel() {
+      const exportBtns = document.querySelectorAll('#exportExcelBtn, .btn-export-toolbar');
+      exportBtns.forEach(btn => {
+        btn.setAttribute('data-orig-html', btn.innerHTML);
+        btn.innerHTML = '<span>Exporting...</span>';
+      });
+
+      // Collect visible matrix rows
+      const matrixRows = document.querySelectorAll('#matrixTable tbody tr:not(#matrixEmptyState)');
+      const matrixExport = [];
+
+      matrixRows.forEach(row => {
+        if (row.style.display !== 'none') {
+          const contract = row.getAttribute('data-contract') || '';
+          const parties = row.getAttribute('data-parties') || '';
+          const law = row.getAttribute('data-law') || '';
+          const subInfo = parties ? parties + ' / ' + law : law;
+          const clauseType = row.getAttribute('data-clause') || '';
+          const riskLevel = row.getAttribute('data-risk') || '';
+          const consentReq = row.getAttribute('data-cp') || '';
+          const actionText = row.getAttribute('data-action') || '';
+          const analysisText = row.getAttribute('data-analysis') || '';
+          const quoteEl = row.querySelector('.quote-box');
+          const quoteText = quoteEl ? quoteEl.innerText.replace(/^"|"$/g, '').trim() : '';
+
+          matrixExport.push({
+            'Contract Title': contract,
+            'Counterparty & Governing Law': subInfo,
+            'Clause Category': clauseType,
+            'Risk Severity': riskLevel,
+            'Closing Consent Required?': consentReq,
+            'Pre-Closing Recommended Action': actionText,
+            'Legal Analysis & Deal Impact': analysisText,
+            'Verbatim Contract Excerpt': quoteText
+          });
+        }
+      });
+
+      // Collect visible CP rows
+      const cpRows = document.querySelectorAll('#cpTable tbody tr:not(#cpEmptyState)');
+      const cpExport = [];
+
+      cpRows.forEach(row => {
+        if (row.style.display !== 'none') {
+          const cpCode = (row.querySelector('td:nth-child(1)')?.innerText || '').trim();
+          const contractTitle = row.getAttribute('data-contract') || '';
+          const counterparties = row.getAttribute('data-parties') || '';
+          const actionItem = row.getAttribute('data-action') || '';
+          const failureRisk = row.getAttribute('data-fail') || '';
+
+          cpExport.push({
+            'CP Code': cpCode,
+            'Contract Title': contractTitle,
+            'Counterparties': counterparties,
+            'Pre-Closing Action Item': actionItem,
+            'Failure Risk & Deal Impact': failureRisk
+          });
+        }
+      });
+
+      // Executive Summary Sheet
+      const summaryExport = [
+        { 'Parameter': 'Deal Name', 'Value': '${dealName}' },
+        { 'Parameter': 'Target Company', 'Value': '${targetName}' },
+        { 'Parameter': 'Audit Date', 'Value': '${dateStr}' },
+        { 'Parameter': 'Total Contracts Audited', 'Value': ${results.length} },
+        { 'Parameter': 'Exported Clauses (Filtered View)', 'Value': matrixExport.length },
+        { 'Parameter': 'Exported Closing Conditions (CP)', 'Value': cpExport.length },
+        { 'Parameter': 'Critical Risks Identified', 'Value': ${criticalCount} },
+        { 'Parameter': 'High Risks Identified', 'Value': ${highCount} },
+        { 'Parameter': 'Medium Risks Identified', 'Value': ${medCount} },
+        { 'Parameter': 'Clean / Low Risks', 'Value': ${lowCount} },
+        { 'Parameter': 'Legal Classification', 'Value': 'ATTORNEY-CLIENT PRIVILEGED / CONFIDENTIAL' }
+      ];
+
+      const filename = 'Project_Titan_Due_Diligence_Matrix';
+
+      if (typeof XLSX !== 'undefined') {
+        try {
+          const wb = XLSX.utils.book_new();
+
+          const wsMatrix = XLSX.utils.json_to_sheet(matrixExport);
+          wsMatrix['!cols'] = [
+            { wch: 32 },
+            { wch: 30 },
+            { wch: 26 },
+            { wch: 14 },
+            { wch: 22 },
+            { wch: 45 },
+            { wch: 55 },
+            { wch: 60 }
+          ];
+
+          const wsCP = XLSX.utils.json_to_sheet(cpExport);
+          wsCP['!cols'] = [
+            { wch: 12 },
+            { wch: 35 },
+            { wch: 32 },
+            { wch: 50 },
+            { wch: 50 }
+          ];
+
+          const wsSummary = XLSX.utils.json_to_sheet(summaryExport);
+          wsSummary['!cols'] = [
+            { wch: 32 },
+            { wch: 45 }
+          ];
+
+          XLSX.utils.book_append_sheet(wb, wsMatrix, 'Red Flag Matrix');
+          XLSX.utils.book_append_sheet(wb, wsCP, 'Closing Conditions (CP)');
+          XLSX.utils.book_append_sheet(wb, wsSummary, 'Deal Summary');
+
+          XLSX.writeFile(wb, filename + '.xlsx');
+        } catch (err) {
+          console.error('XLSX export error, falling back to CSV:', err);
+          fallbackCSVExport(matrixExport, filename + '.csv');
+        }
+      } else {
+        fallbackCSVExport(matrixExport, filename + '.csv');
+      }
+
+      exportBtns.forEach(btn => {
+        btn.innerHTML = '<span>✓ Exported to Excel!</span>';
+        setTimeout(() => {
+          const orig = btn.getAttribute('data-orig-html');
+          if (orig) btn.innerHTML = orig;
+        }, 2200);
+      });
+    }
+
+    function fallbackCSVExport(rows, filename) {
+      if (!rows.length) return;
+      const headers = Object.keys(rows[0]);
+      let csvContent = '\\uFEFF' + headers.map(h => '"' + h.replace(/"/g, '""') + '"').join(',') + '\\r\\n';
+      rows.forEach(r => {
+        const rowStr = headers.map(h => {
+          const val = (r[h] || '').toString();
+          return '"' + val.replace(/"/g, '""') + '"';
+        }).join(',');
+        csvContent += rowStr + '\\r\\n';
+      });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => document.body.removeChild(link), 100);
+    }
   </script>
 </body>
 </html>`;
@@ -967,13 +1181,77 @@ function generateHTMLDashboard(dealName, targetName, results, outputPath) {
   fs.writeFileSync(outputPath, html, 'utf-8');
 }
 
+// CLI Argument Parsing
+function parseCLIArgs() {
+  const args = process.argv.slice(2);
+  let deal = process.env.DEAL_NAME || 'Project Titan Acquisition';
+  let target = process.env.TARGET_NAME || 'Target Technologies Corp.';
+  let contractsDir = null;
+  let shouldOpen = false;
+
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a.startsWith('--deal=') || a.startsWith('--deal-name=')) {
+      deal = a.substring(a.indexOf('=') + 1).replace(/^["']|["']$/g, '');
+    } else if (a === '--deal' || a === '--deal-name') {
+      if (i + 1 < args.length) deal = args[++i].replace(/^["']|["']$/g, '');
+    } else if (a.startsWith('--target=') || a.startsWith('--target-name=')) {
+      target = a.substring(a.indexOf('=') + 1).replace(/^["']|["']$/g, '');
+    } else if (a === '--target' || a === '--target-name') {
+      if (i + 1 < args.length) target = args[++i].replace(/^["']|["']$/g, '');
+    } else if (a.startsWith('--contracts=') || a.startsWith('--input=')) {
+      contractsDir = a.substring(a.indexOf('=') + 1).replace(/^["']|["']$/g, '');
+    } else if (a === '--contracts' || a === '--input') {
+      if (i + 1 < args.length) contractsDir = args[++i].replace(/^["']|["']$/g, '');
+    } else if (a === '--open') {
+      shouldOpen = true;
+    }
+  }
+  return { dealName: deal, targetName: target, contractsDir, shouldOpen };
+}
+
+function getProjectSlug(name) {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+const { dealName, targetName, contractsDir: cliContractsDir, shouldOpen } = parseCLIArgs();
+const projectSlug = getProjectSlug(dealName);
+
+// Resolve Contracts Input Directory:
+// 1. Specified via CLI
+// 2. contracts/<projectSlug> if it exists
+// 3. Fallback to contracts/ root
+let activeContractsDir = path.join(__dirname, 'contracts');
+if (cliContractsDir && fs.existsSync(cliContractsDir)) {
+  activeContractsDir = path.resolve(cliContractsDir);
+} else {
+  const subContractsDir = path.join(__dirname, 'contracts', projectSlug);
+  if (fs.existsSync(subContractsDir)) {
+    activeContractsDir = subContractsDir;
+  }
+}
+
+// Resolve Reports Output Directory:
+// Each project gets its own isolated folder: reports/<projectSlug>/
+const dealReportsDir = path.join(REPORTS_DIR, projectSlug);
+if (!fs.existsSync(dealReportsDir)) {
+  fs.mkdirSync(dealReportsDir, { recursive: true });
+}
+
 // MAIN EXECUTION
 console.log('='.repeat(70));
 console.log('⚖️  LEGAL M&A DUE DILIGENCE AUTOMATION RUNNER');
+console.log(`💼 Transaction : ${dealName}`);
+console.log(`🎯 Target      : ${targetName}`);
+console.log(`📁 Input Room  : ${activeContractsDir}`);
+console.log(`📊 Output Room : ${dealReportsDir}`);
 console.log('='.repeat(70));
 
 // Find all files (.pdf or .txt) and prefer .pdf when both exist
-const rawFiles = fs.readdirSync(CONTRACTS_DIR).filter(f => f.endsWith('.pdf') || f.endsWith('.txt')).sort();
+const rawFiles = fs.readdirSync(activeContractsDir).filter(f => f.endsWith('.pdf') || f.endsWith('.txt')).sort();
 const fileMap = new Map();
 rawFiles.forEach(f => {
   const base = f.replace(/\.(pdf|txt)$/i, '');
@@ -985,7 +1263,7 @@ const files = Array.from(fileMap.values()).sort();
 const results = [];
 
 files.forEach(f => {
-  const filePath = path.join(CONTRACTS_DIR, f);
+  const filePath = path.join(activeContractsDir, f);
   const isPdf = f.endsWith('.pdf');
   console.log(`[*] Ingesting & Analyzing (${isPdf ? 'PDF' : 'TXT'}): ${f}...`);
   const text = isPdf ? extractTextFromPDF(filePath) : fs.readFileSync(filePath, 'utf-8');
@@ -995,15 +1273,39 @@ files.forEach(f => {
   console.log(`    -> Risk: ${res.overallRisk} | Findings: ${res.findings.length} | CP: ${res.closingCPRequired ? 'YES' : 'NO'}`);
 });
 
-const pdfPath = path.join(REPORTS_DIR, 'due_diligence_report.pdf');
-const mdPath = path.join(REPORTS_DIR, 'due_diligence_report.md');
-const csvPath = path.join(REPORTS_DIR, 'due_diligence_red_flag_matrix.csv');
-const htmlPath = path.join(REPORTS_DIR, 'due_diligence_dashboard.html');
+const pdfPath = path.join(dealReportsDir, 'due_diligence_report.pdf');
+const mdPath = path.join(dealReportsDir, 'due_diligence_report.md');
+const csvPath = path.join(dealReportsDir, 'due_diligence_red_flag_matrix.csv');
+const htmlPath = path.join(dealReportsDir, 'due_diligence_dashboard.html');
 
-generateDueDiligencePDFReport('Project Titan Acquisition', 'Target Technologies Corp.', results, pdfPath);
-generateMarkdownReport('Project Titan Acquisition', 'Target Technologies Corp.', results, mdPath);
+generateDueDiligencePDFReport(dealName, targetName, results, pdfPath);
+generateMarkdownReport(dealName, targetName, results, mdPath);
 generateCSVMatrix(results, csvPath);
-generateHTMLDashboard('Project Titan Acquisition', 'Target Technologies Corp.', results, htmlPath);
+generateHTMLDashboard(dealName, targetName, results, htmlPath);
+
+// Security & CV Portfolio Sync Check:
+const isTitanDemo = projectSlug.includes('titan');
+if (isTitanDemo) {
+  // Mirror to root reports/ for default access
+  fs.copyFileSync(htmlPath, path.join(REPORTS_DIR, 'due_diligence_dashboard.html'));
+  fs.copyFileSync(pdfPath, path.join(REPORTS_DIR, 'due_diligence_report.pdf'));
+  fs.copyFileSync(csvPath, path.join(REPORTS_DIR, 'due_diligence_red_flag_matrix.csv'));
+  fs.copyFileSync(mdPath, path.join(REPORTS_DIR, 'due_diligence_report.md'));
+
+  // Sync to CV/reports/ for GitHub Pages portfolio
+  const cvReportsDir = path.join(__dirname, 'CV', 'reports');
+  if (fs.existsSync(cvReportsDir)) {
+    fs.copyFileSync(htmlPath, path.join(cvReportsDir, 'due_diligence_dashboard.html'));
+    fs.copyFileSync(pdfPath, path.join(cvReportsDir, 'due_diligence_report.pdf'));
+    fs.copyFileSync(csvPath, path.join(cvReportsDir, 'due_diligence_red_flag_matrix.csv'));
+    fs.copyFileSync(mdPath, path.join(cvReportsDir, 'due_diligence_report.md'));
+    console.log('🔄 Synced Project Titan demo reports to CV/reports/ for GitHub Pages!');
+  }
+} else {
+  console.log('🔒 Confidentiality Protection Active:');
+  console.log(`   -> Reports isolated strictly to: ${dealReportsDir}`);
+  console.log('   -> Public CV/portfolio sync SKIPPED to protect client privilege & NDAs.');
+}
 
 console.log('-'.repeat(70));
 console.log('✅ Pipeline Execution Complete!');
@@ -1012,3 +1314,9 @@ console.log(`📄 Markdown Report:  ${mdPath}`);
 console.log(`📊 CSV Risk Matrix:  ${csvPath}`);
 console.log(`🌐 HTML Dashboard:   ${htmlPath}`);
 console.log('='.repeat(70));
+
+if (shouldOpen) {
+  const { exec } = require('child_process');
+  exec(`start "" "${pdfPath}"`);
+  exec(`start "" "${htmlPath}"`);
+}
